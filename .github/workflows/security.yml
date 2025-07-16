@@ -25,13 +25,13 @@ jobs:
         chmod +x gitleaks && sudo mv gitleaks /usr/local/bin/
 
     - name: Run Bandit
-      run: bandit -r . || true
+      run: bandit -r vulnerable_code || true
 
     - name: Run Semgrep
-      run: semgrep --config=auto . || true
+      run: semgrep --config=auto vulnerable_code || true
 
     - name: Run Safety
-      run: safety check -r requirements.txt || true
+      run: safety check -r vulnerable_code/requirements.txt || true
 
     - name: Run Gitleaks
       run: gitleaks detect --source=. --no-git || true
