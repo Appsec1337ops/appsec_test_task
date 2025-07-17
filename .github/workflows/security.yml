@@ -1,4 +1,4 @@
-name: Security Pipeline
+name: AppSec Pipeline
 
 on:
   push:
@@ -7,62 +7,48 @@ on:
 
 jobs:
   appsec:
+    name: AppSec Checks
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Set up Java
-        uses: actions/setup-java@v3
-        with:
-          distribution: temurin
-          java-version: '11'
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
 
-      - name: Build with Gradle (no tests)
-        run: ./gradlew build -x test
+    - name: Install security tools
+      run: |
+        pip install safety
+        curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_linux_x64 -o gitleaks
+        chmod +x gitleaks && sudo mv gitleaks /usr/local/bin/
+        curl -sLO https://github.com/google/osv-scanner/releases/latest/download/osv-scanner-linux-amd64
+        chmod +x osv-scanner-linux-amd64 && sudo mv osv-scanner-linux-amd64 /usr/local/bin/osv-scanner
 
-      - name: Run Semgrep (SAST)
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: auto
-        continue-on-error: true
+    - name: Run Semgrep
+      uses: returntocorp/semgrep-action@v1
+      with:
+        config: auto
+      continue-on-error: true  # не ломает pipeline
 
-      - name: Upload Semgrep Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: semgrep-report
-          path: semgrep.report.json
-        continue-on-error: true
+    - name: Run Gitleaks
+      run: gitleaks detect --source=. --no-git --report-format sarif --report-path gitleaks.sarif || true
 
-      - name: OWASP Dependency Check (SCA)
-        uses: dependency-check/Dependency-Check_Action@main
-        with:
-          project: "dvsb-app"
-          path: "."
-          format: "HTML"
-        continue-on-error: true
+    - name: Run Safety (Python SCA)
+      run: |
+        safety check -r requirements.txt --json > safety-report.json || true
 
-      - name: Upload Dependency Check Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: dependency-check-report
-          path: dependency-check-report.html
-        continue-on-error: true
+    - name: Run OSV Scanner (Universal SCA)
+      run: |
+        osv-scanner --lockfile=requirements.txt --format json > osv-report.json || true
 
-      - name: Run Gitleaks (секреты)
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITLEAKS_LICENSE: accept
-        continue-on-error: true
-
-      - name: Start App
-        run: |
-          nohup java -jar build/libs/*.jar &
-          sleep 20
-
-      - name: OWASP ZAP Baseline Scan (DAST)
-        uses: zaproxy/action-baseline@v0.10.0
-        with:
-          target: 'http://localhost:8080'
-        continue-on-error: true
+    - name: Upload Security Reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: appsec-reports
+        path: |
+          *.json
+          *.sarif
+        if-no-files-found: warn
