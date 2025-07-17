@@ -1,54 +1,57 @@
-name: AppSec Pipeline
+name: AppSec CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
 
 jobs:
   appsec:
-    name: AppSec Checks
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v3
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v4
       with:
-        python-version: '3.11'
+        python-version: '3.10'
 
     - name: Install security tools
       run: |
-        pip install safety
+        pip install -r requirements.txt || true
+        pip install safety semgrep
+
+        curl -sLO https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_1.6.2_linux_amd64.deb
+        sudo dpkg -i osv-scanner_1.6.2_linux_amd64.deb
+        rm osv-scanner_1.6.2_linux_amd64.deb
+
         curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_linux_x64 -o gitleaks
         chmod +x gitleaks && sudo mv gitleaks /usr/local/bin/
-        curl -sLO https://github.com/google/osv-scanner/releases/latest/download/osv-scanner-linux-amd64
-        chmod +x osv-scanner-linux-amd64 && sudo mv osv-scanner-linux-amd64 /usr/local/bin/osv-scanner
 
-    - name: Run Semgrep
-      uses: returntocorp/semgrep-action@v1
-      with:
-        config: auto
-      continue-on-error: true  # не ломает pipeline
-
-    - name: Run Gitleaks
-      run: gitleaks detect --source=. --no-git --report-format sarif --report-path gitleaks.sarif || true
-
-    - name: Run Safety (Python SCA)
+    - name: Run Safety (Python vuln DB)
       run: |
-        safety check -r requirements.txt --json > safety-report.json || true
+        safety check -r requirements.txt --full-report > safety-report.txt || true
 
-    - name: Run OSV Scanner (Universal SCA)
+    - name: Run OSV-Scanner
       run: |
         osv-scanner --lockfile=requirements.txt --format json > osv-report.json || true
 
-    - name: Upload Security Reports
+    - name: Run Gitleaks
+      run: |
+        gitleaks detect --source=. --report-format=json --report-path=gitleaks-report.json || true
+
+    - name: Run Semgrep
+      run: |
+        semgrep --config=auto --json > semgrep-report.json || true
+
+    - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: appsec-reports
         path: |
-          *.json
-          *.sarif
-        if-no-files-found: warn
+          safety-report.txt
+          osv-report.json
+          gitleaks-report.json
+          semgrep-report.json
