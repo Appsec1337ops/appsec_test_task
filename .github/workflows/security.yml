@@ -23,10 +23,13 @@ jobs:
         pip install -r requirements.txt || true
         pip install safety semgrep
 
-        curl -sLO https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_1.6.2_linux_amd64.deb
-        sudo dpkg -i osv-scanner_1.6.2_linux_amd64.deb
-        rm osv-scanner_1.6.2_linux_amd64.deb
+        # Install osv-scanner safely via tar.gz
+        curl -sLO https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_1.6.2_linux_amd64.tar.gz
+        tar -xzf osv-scanner_1.6.2_linux_amd64.tar.gz
+        sudo mv osv-scanner /usr/local/bin/
+        rm osv-scanner_1.6.2_linux_amd64.tar.gz
 
+        # Install Gitleaks
         curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_linux_x64 -o gitleaks
         chmod +x gitleaks && sudo mv gitleaks /usr/local/bin/
 
@@ -46,7 +49,7 @@ jobs:
       run: |
         semgrep --config=auto --json > semgrep-report.json || true
 
-    - name: Upload artifacts
+    - name: Upload AppSec Reports
       uses: actions/upload-artifact@v4
       with:
         name: appsec-reports
