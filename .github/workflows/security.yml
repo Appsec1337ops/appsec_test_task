@@ -42,9 +42,12 @@ jobs:
         distribution: temurin
         java-version: '17'
 
+    - name: Install Maven
+      uses: s4u/setup-maven-action@v1
+
     - name: Build and Run App
       run: |
-        ./mvnw clean package -DskipTests
+        mvn clean package -DskipTests
         java -jar target/*.jar &
         sleep 15
 
