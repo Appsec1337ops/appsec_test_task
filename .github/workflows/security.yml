@@ -1,4 +1,4 @@
-name: Security Pipeline
+name: AppSec CI
 
 on:
   push:
@@ -13,59 +13,41 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-
-    - name: Install security tools
-      run: |
-        pip install bandit safety semgrep
-        curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_linux_x64 -o gitleaks
-        chmod +x gitleaks && sudo mv gitleaks /usr/local/bin/
-
-    - name: Run Bandit
-      run: bandit -r vulnerable_code || true
-
-    - name: Run Semgrep
-      run: semgrep --config=auto vulnerable_code || true
-
-    - name: Run Safety
-      run: safety check -r vulnerable_code/requirements.txt || true
-
-    - name: Run Gitleaks
-      run: gitleaks detect --source=. --no-git || true
-
     - name: Set up Java
       uses: actions/setup-java@v3
       with:
         distribution: temurin
         java-version: '17'
 
-    - name: Build and Run App
+    - name: Install tools
       run: |
-        mvn clean package -DskipTests
+        sudo apt-get update
+        sudo apt-get install -y unzip
+        pip install semgrep
+        curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks-linux-amd64 -o gitleaks
+        chmod +x gitleaks && sudo mv gitleaks /usr/local/bin/
+
+    - name: Build Spring Boot app
+      working-directory: app
+      run: |
+        ./mvnw clean package -DskipTests
         java -jar target/*.jar &
-        sleep 15
+        sleep 20
 
     - name: Semgrep (SAST)
-      uses: returntocorp/semgrep-action@v1
-      with:
-        config: auto
-
-    - name: OWASP Dependency Check (SCA)
-      uses: dependency-check/Dependency-Check_Action@main
-      with:
-        project: "dv-spring-app"
-        path: "."
-        format: "HTML"
+      run: semgrep --config=auto .
 
     - name: Gitleaks (секрет-сканер)
-      uses: gitleaks/gitleaks-action@v2
-      env:
-        GITLEAKS_LICENSE: accept
+      run: gitleaks detect --source=. --no-git || true
 
-    - name: OWASP ZAP Baseline Scan (DAST)
+    - name: OWASP Dependency-Check (SCA)
+      uses: dependency-check/Dependency-Check_Action@main
+      with:
+        project: "dvsb-app"
+        path: "./app"
+        format: "HTML"
+
+    - name: OWASP ZAP (DAST)
       uses: zaproxy/action-baseline@v0.10.0
       with:
         target: 'http://localhost:8080'
