@@ -18,20 +18,22 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Install security tools
+    - name: Install Python deps and security tools
       run: |
         pip install -r requirements.txt || true
         pip install safety semgrep
 
-        # Install osv-scanner safely via tar.gz
-        curl -sLO https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_1.6.2_linux_amd64.tar.gz
-        tar -xzf osv-scanner_1.6.2_linux_amd64.tar.gz
-        sudo mv osv-scanner /usr/local/bin/
-        rm osv-scanner_1.6.2_linux_amd64.tar.gz
-
-        # Install Gitleaks
+    - name: Install Gitleaks
+      run: |
         curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_linux_x64 -o gitleaks
-        chmod +x gitleaks && sudo mv gitleaks /usr/local/bin/
+        chmod +x gitleaks
+        sudo mv gitleaks /usr/local/bin/gitleaks
+
+    - name: Install OSV-Scanner binary
+      run: |
+        curl -sLO https://github.com/google/osv-scanner/releases/latest/download/osv-scanner-linux-amd64
+        chmod +x osv-scanner-linux-amd64
+        sudo mv osv-scanner-linux-amd64 /usr/local/bin/osv-scanner
 
     - name: Run Safety (Python vuln DB)
       run: |
@@ -41,15 +43,15 @@ jobs:
       run: |
         osv-scanner --lockfile=requirements.txt --format json > osv-report.json || true
 
-    - name: Run Gitleaks
+    - name: Run Gitleaks (secret scan)
       run: |
         gitleaks detect --source=. --report-format=json --report-path=gitleaks-report.json || true
 
-    - name: Run Semgrep
+    - name: Run Semgrep (SAST)
       run: |
         semgrep --config=auto --json > semgrep-report.json || true
 
-    - name: Upload AppSec Reports
+    - name: Upload scan reports
       uses: actions/upload-artifact@v4
       with:
         name: appsec-reports
