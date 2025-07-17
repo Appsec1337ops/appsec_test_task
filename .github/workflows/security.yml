@@ -1,15 +1,8 @@
-name: Security Checks
-
-on:
-  push:
-    branches: [main]
-
 name: Security Pipeline
 
 on:
   push:
     branches: [ main ]
- (Добавлен AppSec CI: Semgrep, Gitleaks, Dependency-Check)
   pull_request:
 
 jobs:
@@ -17,7 +10,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
     - name: Checkout code
       uses: actions/checkout@v3
 
@@ -43,8 +35,6 @@ jobs:
 
     - name: Run Gitleaks
       run: gitleaks detect --source=. --no-git || true
-
-    - uses: actions/checkout@v3
 
     - name: Set up Java
       uses: actions/setup-java@v3
@@ -80,4 +70,3 @@ jobs:
       with:
         target: 'http://localhost:8080'
       continue-on-error: true
- (Добавлен AppSec CI: Semgrep, Gitleaks, Dependency-Check)
